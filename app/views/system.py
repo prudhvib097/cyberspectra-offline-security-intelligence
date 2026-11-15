@@ -8,6 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from app import services
+from backend import system_logs
 from app.ui.components import empty_state, esc, html_table, page_header, paginator, panel_title, pill
 from backend import analytics
 from backend.config import load_config
@@ -30,8 +31,8 @@ def _sources() -> None:
     with st.container(key="panel-sys-sources"):
         panel_title("Data sources")
         watch = pill("ACTIVE", "low") if status["active"] else pill("NOT WATCHING", "neutral")
-        st.markdown(f'<div style="font-size:14px;margin-bottom:8px">Folder watcher: {watch} {esc(", ".join(status["paths"]))} · Windows Event Log collection: '
-                    f'{pill("AVAILABLE", "low") if services.windows_collection_supported() else pill("WINDOWS ONLY", "neutral")}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-size:14px;margin-bottom:8px">Folder watcher: {watch} {esc(", ".join(status["paths"]))} · System log collection ({system_logs.os_name()}): '
+                    f'{pill("AVAILABLE", "low") if any(o["ok"] for o in system_logs.available_sources()) else pill("UNAVAILABLE", "neutral")}</div>', unsafe_allow_html=True)
         runs = pd.DataFrame(store.list_analysis_runs(limit=25))
         if runs.empty:
             empty_state("NO SOURCES COLLECTED", "No log data has been analyzed yet.", "Upload local security logs on the Monitoring page.")

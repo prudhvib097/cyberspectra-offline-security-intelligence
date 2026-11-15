@@ -45,7 +45,7 @@ def render_header() -> None:
 
 def render_nav() -> None:
     with st.container(key="app-nav"):
-        columns = st.columns([1.1] * len(services.PAGES) + [4.4])
+        columns = st.columns(len(services.PAGES), gap="small")  # equal shares, no spacer: items span the full nav width
         for column, page in zip(columns, services.PAGES):
             column.button(page, key=f"nav-{page}", on_click=services.goto, args=(page,), width="stretch")
 

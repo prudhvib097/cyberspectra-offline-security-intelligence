@@ -74,7 +74,9 @@ hr {{ border-color:var(--border) !important; margin:12px 0 !important; }}
 
 /* ---------- navigation (connected to the header) ---------- */
 .st-key-app-nav {{ background:var(--surface); border:1px solid var(--border); border-top:0; border-radius:0 0 8px 8px; padding:0 16px; min-height:52px; justify-content:center; box-shadow:var(--shadow); margin-bottom:4px; }}
-.st-key-app-nav [data-testid="stHorizontalBlock"] {{ gap:4px; align-items:stretch; }}
+.st-key-app-nav [data-testid="stHorizontalBlock"] {{ gap:0 !important; align-items:stretch; width:100%; flex-wrap:nowrap; }}
+.st-key-app-nav [data-testid="stColumn"] {{ flex:1 1 0 !important; min-width:0 !important; width:auto !important; }}
+.st-key-app-nav .stButton, .st-key-app-nav .stButton button {{ width:100%; }}
 .st-key-app-nav .stButton button {{ background:transparent; border:0; border-bottom:3px solid transparent; border-radius:0; box-shadow:none; color:var(--muted); font-size:16px; font-weight:600; min-height:50px; padding:0 8px; width:100%; }}
 .st-key-app-nav .stButton button p {{ font-size:16px; font-weight:600; color:inherit; margin:0; }}
 .st-key-app-nav .stButton button:hover {{ color:var(--text); background:var(--surface2); }}
@@ -181,8 +183,8 @@ label, [data-testid="stWidgetLabel"] p, [data-testid="stWidgetLabel"] {{ color:v
   section.main .block-container, .stMainBlockContainer {{ padding-left:12px !important; padding-right:12px !important; }}
 }}
 @media (max-width:700px) {{
-  .st-key-app-nav [data-testid="stHorizontalBlock"] {{ overflow-x:auto; flex-wrap:nowrap; }}
-  .st-key-app-nav [data-testid="stColumn"] {{ min-width:96px; }}
+  .st-key-app-nav [data-testid="stHorizontalBlock"] {{ overflow-x:auto; }}
+  .st-key-app-nav [data-testid="stColumn"] {{ min-width:92px !important; flex:1 0 92px !important; }}
   .st-key-app-header [data-testid="stHorizontalBlock"] {{ flex-wrap:wrap; }}
 }}
 @media (max-height:800px) {{ .cs-kpi {{ padding-top:10px; padding-bottom:10px; }} }}
