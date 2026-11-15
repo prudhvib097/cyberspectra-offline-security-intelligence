@@ -184,6 +184,44 @@ def _system_source() -> None:
         st.error(st.session_state.collect_error)
     if status is not None:
         _collection_panel(manager, running)
+    _diagnostics()
+
+
+def _channel_results(sources: dict) -> None:
+    """Per-channel outcome table with the reason for every channel that did not return events."""
+    if not sources:
+        return
+    rows = "".join(
+        f"<tr><td>{esc(name)}</td><td>{esc(str(info.get('status', '')))}</td><td>{fmt_int(info.get('count', 0))}</td><td>{esc(str(info.get('message', '')))}</td></tr>"
+        for name, info in sources.items() if isinstance(info, dict)
+    )
+    st.markdown(f'<div class="cs-table-wrap"><table class="cs-table"><thead><tr><th>Source</th><th>Status</th><th>Events</th><th>Detail</th></tr></thead><tbody>{rows}</tbody></table></div>', unsafe_allow_html=True)
+    if any(isinstance(i, dict) and i.get("status") == "ACCESS_DENIED" for i in sources.values()):
+        st.warning("Some channels need an elevated Windows session. Restart CyberSpectra from a terminal opened with Run as administrator to collect them. "
+                   "CyberSpectra never elevates itself.")
+
+
+def _preview(job_id: str) -> None:
+    frame = st.session_state.get("raw_frame")
+    if st.session_state.get("loaded_job") != job_id or frame is None or frame.empty:
+        return
+    cols = [c for c in ("timestamp", "source_file", "level", "source", "event_id", "message") if c in frame.columns]
+    with st.expander(f"Preview of collected events ({len(frame):,} total, newest 20 shown)"):
+        st.dataframe(frame[cols].head(20), width="stretch", hide_index=True)
+
+
+def _diagnostics() -> None:
+    if not system_logs.os_name().startswith("Windows"):
+        return
+    with st.expander("Windows Event Log diagnostics"):
+        st.caption("Read-only: checks elevation, the Event Log service and each channel's record count as Windows reports it. Nothing is changed.")
+        if st.button("Run diagnostics", key="run_win_diag"):
+            from backend import windows_events
+
+            with st.spinner("Querying Windows…"):
+                st.session_state.win_diag = windows_events.format_report(windows_events.diagnose(windows_events.CHANNELS, 24))
+        if st.session_state.get("win_diag"):
+            st.code(st.session_state.win_diag, language="text")
 
 
 def _collection_panel(manager, running: bool) -> None:
@@ -204,13 +242,16 @@ def _collection_panel(manager, running: bool) -> None:
             if not live and summary:
                 cols = st.columns(5)
                 tone = {"success": "low", "partial": "medium", "empty": "medium", "failed": "critical"}.get(status["outcome"], "neutral")
-                items = [("Events collected", fmt_int(summary.get("total_events", 0))), ("Successful sources", str(summary.get("ok", 0))),
-                         ("Failed sources", str(summary.get("failed", 0))), ("Duration", f"{summary.get('duration', 0)} s"), ("Status", str(status["outcome"]).upper())]
+                items = [("Events collected", fmt_int(summary.get("total_events", 0))), ("Successful", str(summary.get("ok", 0))),
+                         ("Empty / failed", f"{summary.get('empty', 0)} / {summary.get('failed', 0)}"), ("Duration", f"{summary.get('duration', 0)} s"), ("Status", str(status["outcome"]).upper())]
                 for col, (label, value) in zip(cols, items):
                     with col:
                         kpi_card(label, value, "", tone if label == "Status" else "accent")
+                _channel_results(summary.get("sources") or {})
             elif not live and status["state"] in ("failed", "cancelled"):
                 st.error("Collection was cancelled." if status["state"] == "cancelled" else "Collection failed. No events were collected.")
+        if not live:
+            _preview(status["job_id"])
         if not live and status["outcome"] in ("success", "partial") and not status["consumed"]:
             frame = manager.take_result()
             if not frame.empty:

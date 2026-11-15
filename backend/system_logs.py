@@ -154,30 +154,39 @@ def _collect_mac_unified(limit: int, hours: int, on_progress: Callable[[int], No
     return _frame(rows, "macos-unified-log", "log-show")
 
 
-def collect_windows_channel(channel: str, limit: int, hours: int | None = None,
-                            on_progress: Callable[[int], None] | None = None) -> pd.DataFrame:
-    """Read ONE Windows channel live (wevtutil, newest first, honouring look-back).
-
-    Deliberately never falls back to a previously exported CSV: stale data must not be reported as a fresh collection.
-    """
-    if channel not in WINDOWS_CHANNELS:
-        raise ValueError(f"unsupported Windows channel: {channel!r}")
-    from src.windows_event_ingest import stream_wevtutil
-
-    frame = stream_wevtutil(channel, limit, hours, on_progress)
+def windows_result_frame(result) -> pd.DataFrame:
+    """Map a windows_events.ChannelResult to the pipeline's ingestion shape (raw XML preserved)."""
+    frame = result.events
     if frame.empty:
         return pd.DataFrame(columns=COLUMNS)
     stamp = pd.to_datetime(frame["timestamp"], utc=True, errors="coerce").dt.tz_convert(datetime.now().astimezone().tzinfo).dt.tz_localize(None)
-    out = pd.DataFrame({
-        "timestamp": stamp, "level": frame["level"], "source": frame["source"],
-        "message": frame["message"].astype(str), "host": frame["computer"],
-    })
+    out = pd.DataFrame({"timestamp": stamp, "level": frame["level"], "source": frame["source"], "message": frame["message"].astype(str), "host": frame["computer"]})
     out["raw_line"] = (out["timestamp"].dt.strftime("%Y-%m-%d %H:%M:%S").fillna("") + " " + out["host"].fillna("").astype(str)
                        + " " + out["source"].fillna("").astype(str) + ": " + out["message"]).str.strip()
-    out["source_file"] = channel
-    out["ingest_method"] = "wevtutil"
+    out["source_file"] = result.channel
+    out["ingest_method"] = result.method or "wevtutil"
     out["event_id"] = frame["event_id"]
+    out["record_id"] = frame["record_id"]
+    out["raw_event"] = frame["raw_xml"]
     return out
+
+
+def collect_windows_channel(channel: str, limit: int, hours: int | None = None,
+                            on_progress: Callable[[int], None] | None = None) -> pd.DataFrame:
+    """Read ONE Windows channel live and return its events; raises for permission / missing-channel / error outcomes.
+
+    Never falls back to a previously exported CSV: stale data must not be reported as a fresh collection.
+    """
+    from backend import windows_events as we
+
+    result = we.read_channel(channel, limit, hours, on_progress)
+    if result.status == we.ACCESS_DENIED:
+        raise PermissionError(result.message)
+    if result.status == we.CHANNEL_NOT_FOUND:
+        raise LookupError(result.message)
+    if result.status == we.ERROR:
+        raise RuntimeError(result.message)
+    return windows_result_frame(result)
 
 
 def available_sources() -> list[dict]:

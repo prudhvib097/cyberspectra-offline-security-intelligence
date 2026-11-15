@@ -27,7 +27,7 @@ if str(ROOT) not in sys.path:
 
 import pandas as pd  # noqa: E402
 
-from backend import system_logs  # noqa: E402
+from backend import system_logs, windows_events  # noqa: E402
 
 BAR = "=" * 60
 
@@ -47,7 +47,7 @@ class JsonlHandler(logging.Handler):
             "event": getattr(record, "event", "log"),
             "message": record.getMessage(),
         }
-        for key in ("count", "total", "ok", "failed", "status", "duration", "sources", "total_events"):
+        for key in ("count", "total", "ok", "empty", "failed", "status", "duration", "sources", "total_events"):
             if hasattr(record, key):
                 payload[key] = getattr(record, key)
         with self.path.open("a", encoding="utf-8") as handle:
@@ -101,11 +101,16 @@ def run(job_dir: Path) -> int:
         print(f"       Channels: {', '.join(channels)}", flush=True)
     print(f"       Maximum events per source: {limit}\n       Look-back period: {hours} hours\n", flush=True)
 
-    frames: list[pd.DataFrame] = []
-    per_source: dict[str, int] = {}
-    failed: dict[str, str] = {}
+    if os.name == "nt":
+        log.info("Checking the Windows Event Log service...", extra={"event": "log"})
+        log.info(f"Event Log service: {windows_events.event_log_service_state()}", extra={"event": "log"})
+        elevated = windows_events.is_elevated()
+        log.info("Current process permissions: " + ("elevated (administrator)" if elevated else "standard user (Security channel will be denied)"), extra={"event": "log"})
 
-    units: list[tuple[str, str, object]] = []  # (unit name, source id, callable)
+    frames: list[pd.DataFrame] = []
+    outcomes: dict[str, dict] = {}  # name -> {status, count, message}
+
+    units: list[tuple[str, str, str | None]] = []  # (display name, source id, windows channel)
     for source_id in sources:
         if source_id == "windows-events":
             for channel in channels or ["System", "Application"]:
@@ -114,55 +119,59 @@ def run(job_dir: Path) -> int:
             units.append((labels.get(source_id, source_id), source_id, None))
 
     for name, source_id, channel in units:
-        log.info(f"Collecting {name} events...", extra={"event": "source_started", "source": name, "tag": "[RUNNING]"})
-        seen = {"n": 0}
+        log.info(f"Reading {name}...", extra={"event": "source_started", "source": name, "tag": "[RUNNING]"})
 
         def on_progress(count: int, name: str = name) -> None:
-            seen["n"] = count
             log.info(f"Retrieved {count} events", extra={"event": "progress", "source": name, "count": count, "tag": "[PROGRESS]"})
 
+        status, message, frame = "ERROR", "", pd.DataFrame()
         try:
             if channel is not None:
-                frame = system_logs.collect_windows_channel(channel, limit, hours, on_progress)
+                result = windows_events.read_channel(channel, limit, hours, on_progress)
+                status, message, frame = result.status, result.message, system_logs.windows_result_frame(result)
+                if result.duplicates:
+                    message += f" ({result.duplicates} duplicate records removed)"
             else:
                 frame, notes = system_logs.collect([source_id], limit, hours, None, None, lambda _s, n: on_progress(n))
-                bad = [n for n in notes if ":" in n and "records" not in n]
+                bad = [n.split(":", 1)[1].strip() for n in notes if ":" in n and "records" not in n]
                 if frame.empty and bad:
-                    raise RuntimeError(bad[0].split(":", 1)[1].strip())
+                    status, message = ("ACCESS_DENIED" if "permission" in bad[0].lower() or "elevated" in bad[0].lower() else "ERROR"), bad[0]
+                else:
+                    status, message = ("SUCCESS" if len(frame) else "EMPTY"), f"Retrieved {len(frame)} events." if len(frame) else "No events matched."
         except PermissionError as exc:
-            failed[name] = f"permission denied - {exc}"
-        except (LookupError, ValueError, TimeoutError, RuntimeError, OSError) as exc:
-            failed[name] = str(exc)
+            status, message = "ACCESS_DENIED", str(exc)
         except Exception as exc:  # noqa: BLE001 - a worker must always report, never die silently
-            failed[name] = f"unexpected {type(exc).__name__}: {exc}"
-        else:
-            per_source[name] = len(frame)
-            if not frame.empty:
-                frames.append(frame)
-            log.info(f"{name} collection completed: {len(frame)} events.", extra={"event": "source_finished", "source": name, "count": len(frame), "ok": True, "tag": "[SUCCESS]"})
-            continue
-        log.error(f"{name} failed: {failed[name]}", extra={"event": "source_finished", "source": name, "ok": False, "tag": "[ERROR]"})
+            status, message = "ERROR", f"{type(exc).__name__}: {exc}"
+        count = len(frame)
+        outcomes[name] = {"status": status, "count": count, "message": message}
+        if count:
+            frames.append(frame)
+        tag = {"SUCCESS": "[SUCCESS]", "EMPTY": "[INFO]", "DISABLED": "[WARN]"}.get(status, "[ERROR]")
+        line = f"{name}: {status} - {message}" if status != "SUCCESS" else f"Retrieved {count} {name} events."
+        (log.error if tag == "[ERROR]" else log.info)(line, extra={"event": "source_finished", "source": name, "count": count, "status": status, "ok": status in ("SUCCESS", "EMPTY"), "tag": tag})
 
-    total = int(sum(per_source.values()))
+    log.info("Normalizing and saving collected events...", extra={"event": "log"})
+    total = int(sum(o["count"] for o in outcomes.values()))
     duration = round(time.time() - started, 1)
     if frames:
-        result = pd.concat(frames, ignore_index=True)
-        result.to_csv(job_dir / "result.csv", index=False)
-    status = "failed" if (failed and total == 0) else "partial" if failed else "empty" if total == 0 else "success"
+        pd.concat(frames, ignore_index=True).to_csv(job_dir / "result.csv", index=False)
+    failed_n = sum(o["status"] in ("ACCESS_DENIED", "CHANNEL_NOT_FOUND", "ERROR") for o in outcomes.values())
+    ok_n = sum(o["status"] == "SUCCESS" for o in outcomes.values())
+    empty_n = sum(o["status"] in ("EMPTY", "DISABLED") for o in outcomes.values())
+    status = ("partial" if total else "failed") if failed_n else ("success" if total else "empty")
 
     print(f"\n{BAR}\n COLLECTION SUMMARY\n{BAR}\n", flush=True)
-    for name, count in per_source.items():
-        print(f"{name} events: {count}", flush=True)
-    for name, reason in failed.items():
-        print(f"{name}: FAILED ({reason})", flush=True)
-    print(f"Total events collected: {total}\nCollection status: {status.upper()}\nDuration: {duration}s\n", flush=True)
+    for name, o in outcomes.items():
+        print(f"{name}: {o['count']} events [{o['status']}]" + (f" - {o['message']}" if o["status"] not in ("SUCCESS",) else ""), flush=True)
+    print(f"\nTotal events collected: {total}\nSources with events: {ok_n}   Empty: {empty_n}   Failed: {failed_n}\n"
+          f"Collection status: {status.upper()}\nDuration: {duration}s\n", flush=True)
 
     if status in ("success", "partial"):
         log.info("Collected events saved. Handing over to the CyberSpectra analysis pipeline.", extra={"event": "log"})
     elif status == "empty":
         log.warning("No matching events were found for the selected sources and look-back period.", extra={"event": "log"})
-    log.info(f"Collection {status}.", extra={"event": "finished", "status": status, "total_events": total, "ok": len(per_source), "failed": len(failed), "duration": duration,
-                                             "sources": {**{k: v for k, v in per_source.items()}, **{k: f"FAILED: {v}" for k, v in failed.items()}}, "tag": "[SUCCESS]" if status == "success" else "[WARN]"})
+    log.info(f"Collection {status}.", extra={"event": "finished", "status": status, "total_events": total, "ok": ok_n, "empty": empty_n, "failed": failed_n,
+                                             "duration": duration, "sources": outcomes, "tag": "[SUCCESS]" if status == "success" else "[WARN]" if status != "failed" else "[ERROR]"})
     print(BAR, flush=True)
     if request.get("hold"):
         _hold_window()
