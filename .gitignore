@@ -1,0 +1,59 @@
+# --- Secrets & environment ---
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+*.pem
+*.key
+*.p12
+id_rsa*
+credentials*.json
+
+# --- Python ---
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Local runtime data (never commit real logs or databases) ---
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+data/logs/windows_events_admin.csv
+data/uploads/
+logs/*
+!logs/.gitkeep
+
+# --- Generated reports & model artifacts ---
+reports/*
+!reports/README.md
+models/*
+!models/.gitkeep
+*.joblib
+*.pkl
+
+# --- Benchmarks / temp ---
+benchmarks/output/
+*.tmp
+*.log.bak
+tmp_*
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
