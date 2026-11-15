@@ -122,4 +122,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-No license has been selected yet; all rights reserved by the author until one is added.
+MIT — see [LICENSE](LICENSE).
