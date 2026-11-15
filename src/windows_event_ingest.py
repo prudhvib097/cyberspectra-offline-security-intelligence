@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -21,10 +22,16 @@ def _import_pywin32():
         return None
 
 
+_XMLNS = re.compile(r'\sxmlns(?::\w+)?=("[^"]*"|\'[^\']*\')')
+_EVENT_LEVELS = {1: "CRITICAL", 2: "ERROR", 3: "WARNING", 4: "INFO", 5: "DEBUG"}
+
+
 def _parse_wevtutil_xml(xml_blob: str) -> List[dict]:
+    """Parse `wevtutil qe /f:xml` output. Real events declare a default XML namespace, which is stripped first
+    (otherwise ElementTree would never match the <Event> elements)."""
     records: List[dict] = []
     try:
-        root = ET.fromstring(f"<Events>{xml_blob}</Events>")
+        root = ET.fromstring(f"<Events>{_XMLNS.sub('', xml_blob)}</Events>")
     except ET.ParseError:
         return records
 
@@ -33,6 +40,8 @@ def _parse_wevtutil_xml(xml_blob: str) -> List[dict]:
         event_id = None
         time_generated = None
         provider = None
+        level = None
+        computer = None
         if system is not None:
             ev_id_el = system.find("EventID")
             if ev_id_el is not None:
@@ -46,6 +55,12 @@ def _parse_wevtutil_xml(xml_blob: str) -> List[dict]:
             prov = system.find("Provider")
             if prov is not None:
                 provider = prov.attrib.get("Name")
+            level_el = system.find("Level")
+            if level_el is not None and (level_el.text or "").strip().isdigit():
+                level = _EVENT_LEVELS.get(int(level_el.text))
+            comp_el = system.find("Computer")
+            if comp_el is not None:
+                computer = comp_el.text
 
         # EventData may contain multiple Data elements
         msg_parts: List[str] = []
@@ -55,16 +70,69 @@ def _parse_wevtutil_xml(xml_blob: str) -> List[dict]:
                 if data.text:
                     msg_parts.append(data.text)
 
-        record = {
+        records.append({
             "timestamp": pd.to_datetime(time_generated, errors="coerce") if time_generated else pd.NaT,
             "event_id": event_id,
-            "level": None,
+            "level": level,
             "source": provider,
             "message": " | ".join(msg_parts) if msg_parts else "",
-            "computer": None,
-        }
-        records.append(record)
+            "computer": computer,
+        })
     return records
+
+
+def stream_wevtutil(channel: str, max_records: int = 500, hours: int | None = None, on_progress=None,
+                    step: int = 250, timeout: float = 180.0) -> pd.DataFrame:
+    """Read a channel with `wevtutil qe`, newest first, counting real events as they stream in.
+
+    `channel` must already be validated by the caller (it is passed as a single argv item, never through a shell).
+    Raises PermissionError (access denied), LookupError (unknown channel) or TimeoutError.
+    """
+    import threading
+
+    cmd = ["wevtutil", "qe", channel, "/f:xml", f"/c:{int(max_records)}", "/rd:true"]
+    if hours:
+        cmd.append(f"/q:*[System[TimeCreated[timediff(@SystemTime) <= {int(hours) * 3600 * 1000}]]]")
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+    timed_out = threading.Event()
+
+    def _kill() -> None:
+        timed_out.set()
+        proc.kill()
+
+    timer = threading.Timer(timeout, _kill)
+    timer.start()
+    records: List[dict] = []
+    buffer: List[str] = []
+    try:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            buffer.append(line)
+            if "</Event>" in line:
+                records.extend(_parse_wevtutil_xml("".join(buffer)))
+                buffer = []
+                if on_progress and len(records) % step == 0:
+                    on_progress(len(records))
+        proc.wait()
+    finally:
+        timer.cancel()
+        if proc.poll() is None:
+            proc.kill()
+    stderr = (proc.stderr.read() if proc.stderr else "") or ""
+    if timed_out.is_set():
+        raise TimeoutError(f"{channel}: wevtutil did not finish within {int(timeout)} seconds")
+    if proc.returncode not in (0, None):
+        lowered = stderr.lower()
+        if proc.returncode == 5 or "access is denied" in lowered:
+            raise PermissionError(f"{channel}: access denied (this channel needs an elevated session)")
+        if proc.returncode == 15007 or "could not be found" in lowered or "channel" in lowered and "not" in lowered:
+            raise LookupError(f"{channel}: channel not found")
+        raise RuntimeError(f"{channel}: wevtutil exited with code {proc.returncode}")
+    if on_progress:
+        on_progress(len(records))
+    frame = pd.DataFrame.from_records(records) if records else pd.DataFrame(columns=["timestamp", "event_id", "level", "source", "message", "computer"])
+    frame["ingest_method"] = "wevtutil"
+    return frame
 
 
 def _read_with_wevtutil(log_type: str, max_records: int = 500) -> pd.DataFrame:

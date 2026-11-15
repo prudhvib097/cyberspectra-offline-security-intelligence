@@ -155,6 +155,13 @@ input, textarea {{ color:var(--text) !important; background:transparent !importa
 [data-testid="stSelectbox"] svg, [data-testid="stMultiSelect"] svg {{ fill:var(--muted) !important; color:var(--muted) !important; }}
 [data-baseweb="select"] *, [data-baseweb="tag"] {{ color:var(--text) !important; }}
 [data-baseweb="tag"] {{ background:var(--accent-soft) !important; }}
+/* Multiselect chips: a chip is [text][x] inside a wrapping row. The row must never scroll horizontally (a scrolled row hides the first
+   characters of a chip) and a chip may shrink, but its text always starts at its own left padding and truncates only at the end. */
+[data-testid="stMultiSelect"] div:has(> span > span > span) {{ overflow-x:clip !important; overflow-y:auto; padding-left:6px; scroll-padding-left:0; }}
+[data-testid="stMultiSelect"] div:has(> span > span > span) > span > span {{ max-width:100% !important; min-width:0; padding:0 10px 0 10px !important; margin-left:0 !important; text-indent:0; box-sizing:border-box; align-items:center; }}
+[data-testid="stMultiSelect"] div:has(> span > span > span) > span > span > span:first-child {{ min-width:0; padding-left:0 !important; margin-left:0 !important; text-indent:0 !important; text-align:left !important; direction:ltr; text-overflow:ellipsis; overflow:hidden; }}
+.cs-console {{ font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; line-height:1.55; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:10px 12px; max-height:230px; overflow-y:auto; color:var(--text); }}
+.cs-console .err {{ color:var(--critical); }} .cs-console .warn {{ color:var(--medium); }}
 [data-baseweb="select"] svg {{ fill:var(--muted) !important; }}
 input::placeholder, [data-baseweb="select"] [class*="placeholder"] {{ color:var(--muted) !important; -webkit-text-fill-color:var(--muted) !important; opacity:1; }}
 [data-testid="stDateInput"] input, [data-baseweb="calendar"], [data-baseweb="calendar"] * {{ background:var(--surface) !important; color:var(--text) !important; }}

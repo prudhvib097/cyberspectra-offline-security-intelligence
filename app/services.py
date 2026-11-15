@@ -227,6 +227,14 @@ def health() -> dict[str, tuple[str, str]]:
     return result
 
 
+@st.cache_resource
+def get_collector():
+    """The single collection-job manager; it survives Streamlit reruns so a click can never start a second worker."""
+    from backend.collection_job import CollectionManager
+
+    return CollectionManager()
+
+
 def windows_collection_supported() -> bool:
     return platform.system() == "Windows"
 

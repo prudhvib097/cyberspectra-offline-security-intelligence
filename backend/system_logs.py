@@ -124,7 +124,7 @@ def _collect_journal(limit: int, hours: int) -> pd.DataFrame:
     return _frame(rows, "systemd-journal", "journalctl")
 
 
-def _collect_mac_unified(limit: int, hours: int) -> pd.DataFrame:
+def _collect_mac_unified(limit: int, hours: int, on_progress: Callable[[int], None] | None = None) -> pd.DataFrame:
     """Read the macOS unified log. Warning-and-above only: the full stream is enormous and mostly noise."""
     proc = subprocess.Popen(
         ["log", "show", "--last", f"{hours}h", "--style", "ndjson", "--predicate", 'messageType == "Error" OR messageType == "Fault" OR process == "sshd" OR process == "sudo" OR process == "loginwindow" OR process == "authd" OR process == "opendirectoryd"'],
@@ -144,6 +144,8 @@ def _collect_mac_unified(limit: int, hours: int) -> pd.DataFrame:
             host = platform.node() or "localhost"
             rows.append({"timestamp": ts, "level": _MAC_LEVEL.get(str(item.get("messageType")), "INFO"), "source": ident,
                          "message": message, "host": host, "raw_line": _syslog_line(ts, host, ident, message)})
+            if on_progress and len(rows) % 250 == 0:
+                on_progress(len(rows))
             if len(rows) >= limit:
                 break
     finally:
@@ -152,22 +154,30 @@ def _collect_mac_unified(limit: int, hours: int) -> pd.DataFrame:
     return _frame(rows, "macos-unified-log", "log-show")
 
 
-def _collect_windows(channels: list[str], limit: int) -> tuple[pd.DataFrame, list[str]]:
-    from src.windows_event_ingest import collect_event_logs
+def collect_windows_channel(channel: str, limit: int, hours: int | None = None,
+                            on_progress: Callable[[int], None] | None = None) -> pd.DataFrame:
+    """Read ONE Windows channel live (wevtutil, newest first, honouring look-back).
 
-    frame, diagnostics = collect_event_logs(channels, server="localhost", max_per_log=limit)
+    Deliberately never falls back to a previously exported CSV: stale data must not be reported as a fresh collection.
+    """
+    if channel not in WINDOWS_CHANNELS:
+        raise ValueError(f"unsupported Windows channel: {channel!r}")
+    from src.windows_event_ingest import stream_wevtutil
+
+    frame = stream_wevtutil(channel, limit, hours, on_progress)
     if frame.empty:
-        return pd.DataFrame(columns=COLUMNS), list(diagnostics)
+        return pd.DataFrame(columns=COLUMNS)
+    stamp = pd.to_datetime(frame["timestamp"], utc=True, errors="coerce").dt.tz_convert(datetime.now().astimezone().tzinfo).dt.tz_localize(None)
     out = pd.DataFrame({
-        "timestamp": frame.get("timestamp"), "level": frame.get("level"), "source": frame.get("source"),
-        "message": frame.get("message", "").astype(str), "host": frame.get("computer"),
+        "timestamp": stamp, "level": frame["level"], "source": frame["source"],
+        "message": frame["message"].astype(str), "host": frame["computer"],
     })
-    out["raw_line"] = frame["message"].astype(str) if "message" in frame else ""
-    out["source_file"] = frame["log_type"] if "log_type" in frame else "WindowsEvent"
-    out["ingest_method"] = frame["ingest_method"] if "ingest_method" in frame else "wevtutil"
-    if "event_id" in frame:
-        out["event_id"] = frame["event_id"]
-    return out, list(diagnostics)
+    out["raw_line"] = (out["timestamp"].dt.strftime("%Y-%m-%d %H:%M:%S").fillna("") + " " + out["host"].fillna("").astype(str)
+                       + " " + out["source"].fillna("").astype(str) + ": " + out["message"]).str.strip()
+    out["source_file"] = channel
+    out["ingest_method"] = "wevtutil"
+    out["event_id"] = frame["event_id"]
+    return out
 
 
 def available_sources() -> list[dict]:
@@ -195,8 +205,13 @@ def available_sources() -> list[dict]:
 
 
 def collect(source_ids: list[str], max_events: int = 2000, hours: int = 24, windows_channels: list[str] | None = None,
-            progress: Callable[[str], None] | None = None) -> tuple[pd.DataFrame, list[str]]:
-    """Collect from the chosen sources. Returns (frame, one diagnostic line per source)."""
+            progress: Callable[[str], None] | None = None,
+            on_count: Callable[[str, int], None] | None = None) -> tuple[pd.DataFrame, list[str]]:
+    """Collect from the chosen sources. Returns (frame, one diagnostic line per source).
+
+    Used synchronously (tests / scripts); the dashboard runs the same functions inside a worker process
+    (backend/collector_worker.py) so a long collection never blocks the UI.
+    """
     frames: list[pd.DataFrame] = []
     notes: list[str] = []
     for source_id in source_ids:
@@ -204,12 +219,16 @@ def collect(source_ids: list[str], max_events: int = 2000, hours: int = 24, wind
             progress(source_id)
         try:
             if source_id == "windows-events":
-                frame, diag = _collect_windows(windows_channels or ["System", "Application"], max_events)
-                notes.extend(diag)
+                parts = []
+                for channel in windows_channels or ["System", "Application"]:
+                    part = collect_windows_channel(channel, max_events, hours, (lambda n, c=channel: on_count(c, n)) if on_count else None)
+                    notes.append(f"{channel}: {len(part):,} records")
+                    parts.append(part)
+                frame = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=COLUMNS)
             elif source_id == "journal":
                 frame = _collect_journal(max_events, hours)
             elif source_id == "mac-unified":
-                frame = _collect_mac_unified(max_events, hours)
+                frame = _collect_mac_unified(max_events, hours, (lambda n: on_count(source_id, n)) if on_count else None)
             elif source_id.startswith("file:"):
                 frame = _collect_file(source_id[5:], max_events)
             else:
@@ -218,7 +237,7 @@ def collect(source_ids: list[str], max_events: int = 2000, hours: int = 24, wind
         except subprocess.TimeoutExpired:
             notes.append(f"{source_id}: timed out; reduce the time window or maximum events")
             continue
-        except (PermissionError, OSError, ValueError) as exc:
+        except (PermissionError, OSError, ValueError, LookupError, TimeoutError, RuntimeError) as exc:
             notes.append(f"{source_id}: {exc}")
             continue
         notes.append(f"{source_id}: {len(frame):,} records")
