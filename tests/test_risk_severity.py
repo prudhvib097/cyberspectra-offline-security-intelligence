@@ -95,7 +95,7 @@ def test_risk_explanation_and_alert_message_consistent() -> None:
 
 
 def test_weights_normalize_to_one() -> None:
-    assert normalize_weights(None) == {"ml": 0.5, "statistical": 0.2, "rules": 0.2, "context": 0.1}
+    assert normalize_weights(None) == pytest.approx({"ml": 0.5, "statistical": 0.2, "rules": 0.2, "context": 0.1})
     result = normalize_weights({"ml": 1.0, "statistical": 1.0, "rules": 1.0, "context": 1.0})
     assert sum(result.values()) == pytest.approx(1.0)
     legacy = normalize_weights({"isolation_forest": 0.7, "statistical": 0.3})
