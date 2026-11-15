@@ -1,0 +1,12 @@
+2026-04-30 08:00:01 host-a kernel: Boot sequence completed
+2026-04-30 08:02:14 host-a systemd: Started authentication service
+2026-04-30 08:05:33 host-a sshd: Accepted password for admin from 10.0.0.12 port 51244 ssh2
+2026-04-30 08:07:48 host-a sshd: Failed password for invalid user test from 10.0.0.23 port 51260 ssh2
+2026-04-30 08:10:11 host-a CRON: Job backup completed successfully
+2026-04-30 08:13:22 host-a kernel: CPU soft lockup detected on core 2
+2026-04-30 08:18:40 host-a sudo: pam_unix(sudo:auth): authentication failure; logname= user=admin tty=/dev/pts/0
+2026-04-30 08:22:19 host-a systemd: NetworkManager service restarted
+2026-04-30 08:27:05 host-a kernel: Disk I/O timeout on /dev/sda
+2026-04-30 08:31:58 host-a sshd: Received disconnect from 10.0.0.23 port 51260:11: disconnected by user
+2026-04-30 08:35:44 host-a kernel: Memory allocation failure in process postgres
+2026-04-30 08:40:16 host-a systemd: Reached target Multi-User System

@@ -1,0 +1,40 @@
+{
+  "model": {
+    "default_contamination": 0.12,
+    "weights": {
+      "ml": 0.5,
+      "statistical": 0.2,
+      "rules": 0.2,
+      "context": 0.1
+    }
+  },
+  "aggregation": {
+    "window_seconds": 120,
+    "login_burst_threshold": 5
+  },
+  "monitoring": {
+    "polling_interval_seconds": 10,
+    "max_upload_size_mb": 200,
+    "duplicate_prevention": true
+  },
+  "risk": {
+    "severity_boundaries": {
+      "low": 25,
+      "medium": 50,
+      "high": 75,
+      "critical": 100
+    }
+  },
+  "rules": [
+    {
+      "rule_id": "repeated_failed_logins",
+      "name": "Repeated failed logins",
+      "description": "Detect bursty authentication failures",
+      "enabled": true,
+      "condition": "failed_login_count >= 3",
+      "threshold": 3,
+      "severity": "High",
+      "weight": 1.2
+    }
+  ]
+}

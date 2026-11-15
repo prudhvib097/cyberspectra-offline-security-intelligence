@@ -1,0 +1,20 @@
+2026-05-01 09:00:01 auth-srv sshd[1000]: Accepted publickey for analyst from 10.0.1.10 port 58430 ssh2
+2026-05-01 09:05:12 auth-srv sshd[1001]: Accepted password for deploy from 10.0.1.15 port 40122 ssh2
+2026-05-01 09:30:44 auth-srv sshd[1002]: session opened for user analyst by (uid=0)
+2026-05-01 10:00:02 auth-srv sshd[1003]: Failed password for root from 203.0.113.9 port 58421 ssh2
+2026-05-01 10:00:04 auth-srv sshd[1004]: Failed password for root from 203.0.113.9 port 58421 ssh2
+2026-05-01 10:00:06 auth-srv sshd[1005]: Failed password for root from 203.0.113.9 port 58421 ssh2
+2026-05-01 10:00:08 auth-srv sshd[1006]: Failed password for root from 203.0.113.9 port 58421 ssh2
+2026-05-01 10:00:10 auth-srv sshd[1007]: Failed password for root from 203.0.113.9 port 58421 ssh2
+2026-05-01 10:00:12 auth-srv sshd[1008]: Failed password for root from 203.0.113.9 port 58421 ssh2
+2026-05-01 10:00:14 auth-srv sshd[1009]: Failed password for root from 203.0.113.9 port 58421 ssh2
+2026-05-01 10:00:16 auth-srv sshd[1010]: Failed password for root from 203.0.113.9 port 58421 ssh2
+2026-05-01 10:00:18 auth-srv sshd[1011]: Failed password for root from 203.0.113.9 port 58421 ssh2
+2026-05-01 10:01:10 auth-srv sshd[1012]: Failed password for invalid user admin from 203.0.113.9 port 58500 ssh2
+2026-05-01 10:01:12 auth-srv sshd[1013]: Failed password for invalid user admin from 203.0.113.9 port 58502 ssh2
+2026-05-01 10:15:00 auth-srv sshd[1014]: Accepted publickey for analyst from 10.0.1.10 port 58444 ssh2
+2026-05-01 11:20:31 auth-srv sshd[1015]: Failed password for deploy from 10.0.1.15 port 40199 ssh2
+2026-05-01 11:20:40 auth-srv sshd[1016]: Accepted password for deploy from 10.0.1.15 port 40201 ssh2
+2026-05-01 12:00:00 auth-srv sshd[1017]: session closed for user analyst
+2026-05-01 14:10:09 auth-srv sshd[1018]: Accepted publickey for analyst from 10.0.1.10 port 58470 ssh2
+2026-05-01 23:48:17 auth-srv sshd[1019]: Accepted password for root from 198.51.100.77 port 61222 ssh2

@@ -1,0 +1,12 @@
+2026-04-30 12:00:01 Windows Security: Successful logon for user Administrator from 10.0.0.50
+2026-04-30 12:00:18 Windows Security: Failed logon attempt for user admin from 10.0.0.51
+2026-04-30 12:00:42 Windows System: Service Control Manager restarted the Print Spooler service
+2026-04-30 12:01:16 Windows Defender: Threat detected and quarantined successfully
+2026-04-30 12:01:55 Windows Security: Account lockout triggered after repeated failures
+2026-04-30 12:02:08 Windows Application: Unexpected error in inventory-svc.exe
+2026-04-30 12:02:24 Windows System: Disk latency above threshold on volume C:
+2026-04-30 12:03:03 Windows Security: Privileged group membership changed for account ops-admin
+2026-04-30 12:03:41 Windows Application: Application pool recycled due to memory pressure
+2026-04-30 12:04:05 Windows Security: Audit policy changed on host WS-01
+2026-04-30 12:04:19 Windows Firewall: Rule added to allow inbound RDP from 0.0.0.0/0
+2026-04-30 12:04:54 Windows Security: Multiple failed logon attempts from 10.0.0.52

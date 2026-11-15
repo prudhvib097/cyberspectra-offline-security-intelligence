@@ -1,0 +1,13 @@
+eventTime,eventSource,eventName,userIdentity.type,sourceIPAddress,errorCode,userAgent,requestParameters
+2026-04-30T11:00:01Z,signin.amazonaws.com,ConsoleLogin,Root,203.0.113.10,Success,aws-cli/2.15,source=console; outcome=success
+2026-04-30T11:00:12Z,iam.amazonaws.com,CreateUser,IAMUser,203.0.113.10,,aws-cli/2.15,userName=temp-admin
+2026-04-30T11:00:31Z,iam.amazonaws.com,AttachUserPolicy,IAMUser,203.0.113.10,,aws-cli/2.15,userName=temp-admin; policyArn=arn:aws:iam::aws:policy/AdministratorAccess
+2026-04-30T11:01:05Z,s3.amazonaws.com,PutObject,IAMUser,203.0.113.10,,aws-cli/2.15,bucketName=finance-backups; key=audit.tar.gz
+2026-04-30T11:01:08Z,s3.amazonaws.com,GetObject,IAMUser,198.51.100.45,AccessDenied,aws-sdk-java/1.12,bucketName=finance-backups; key=audit.tar.gz
+2026-04-30T11:01:22Z,ec2.amazonaws.com,AuthorizeSecurityGroupIngress,IAMUser,203.0.113.10,,aws-cli/2.15,groupId=sg-0abc123; ipPermissions=0.0.0.0/0:22
+2026-04-30T11:01:41Z,cloudtrail.amazonaws.com,StopLogging,IAMUser,203.0.113.10,,aws-cli/2.15,source=cloudtrail; action=StopLogging
+2026-04-30T11:02:02Z,iam.amazonaws.com,DeleteAccessKey,IAMUser,203.0.113.10,,aws-cli/2.15,userName=audit-bot
+2026-04-30T11:02:18Z,lambda.amazonaws.com,UpdateFunctionCode,IAMUser,203.0.113.10,,aws-cli/2.15,functionName=billing-audit
+2026-04-30T11:03:00Z,guardduty.amazonaws.com,CreateFilter,IAMUser,198.51.100.45,,aws-cli/2.15,detectorId=abcd1234
+2026-04-30T11:03:14Z,iam.amazonaws.com,AddUserToGroup,IAMUser,203.0.113.10,,aws-cli/2.15,groupName=Admins; userName=temp-admin
+2026-04-30T11:03:49Z,signin.amazonaws.com,ConsoleLogin,IAMUser,198.51.100.45,Failure,aws-cli/2.15,source=console; outcome=failure
